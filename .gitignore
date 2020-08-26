@@ -1,0 +1,13 @@
+# Editors
+*.swp
+*.swo
+.vcscode/
+.idea/
+
+# Python crap
+__pycache__/
+*.py[cod]
+*$py.class
+
+.DS_Store
+
