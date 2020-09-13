@@ -46,3 +46,17 @@ class ScatteringNetwork:
 
         self.network = network_mut
 
+    # Convert lattice model into quantum Markov model
+    def output_markov(self):
+        markov_network = nx.DiGraph()
+        # Turn edges into nodes
+        for edge in self.network.edges:
+            markov_network.add_node(edge)
+        # Create an edge in the markov graph for every pair of edges in the
+        # original graph whose source matches the other's desination
+        for edge in self.network.edges:
+            for out_edge in self.network.out_edges(edge):
+                markov_network.add_edge(edge, out_edge)
+
+        return markov_network
+
