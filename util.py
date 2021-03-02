@@ -109,24 +109,6 @@ def get_gradient(U, eigvecs, kx, ky):
 
     return dx, dy
 
-"""
-#https://mathoverflow.net/questions/229425/derivative-of-eigenvectors-of-a-matrix-with-respect-to-its-components
-def get_eig_gradient(U, eigvals, eigvecs, kx, ky):
-    Mx = np.diag([0, 1j*np.exp(1j*kx), 0, -1j*np.exp(-1j*kx)])
-    My = np.diag([1j*np.exp(1j*ky), 0, -1j*np.exp(-1j*ky), 0])
-
-    result = np.zeros((4, 4, 2), dtype=complex)
-
-    for i in range(4):
-        for j in range(4):
-            if i==j:
-                continue
-            k = 1/(eigvals[i]-eigvals[j])
-            result[i, :, 0] += np.vdot(U @ Mx @ eigvecs[i], eigvecs[j])*k*eigvecs[j]
-            result[i, :, 1] += np.vdot(U @ My @ eigvecs[i], eigvecs[j])*k*eigvecs[j]
-    return result
-"""
-
 class DispersionRelation():
     def __init__(self, U, res):
         self._U = U
@@ -142,12 +124,6 @@ class DispersionRelation():
         y_idx = int(round((self._res-1)*(ky+np.pi)/(2*np.pi)))
         eigvals, eigvecs = get_floquet_eig(self._U, kx, ky)
         eigvals, eigvecs = eig_adj(self._eigvals[x_idx, y_idx], self._eigvecs[x_idx, y_idx], eigvals, eigvecs)
-        #M = np.diag([np.exp(1j*ky), np.exp(1j*kx), np.exp(-1j*ky), np.exp(-1j*kx)])
-        #for i in range(4):
-        #    if not np.allclose((((self._U@M)@eigvecs)/eigvecs)[i], eigvals):
-        #        print(eigvals)
-        #        print(eigvecs)
-        #        raise Exception("nope")
         self._kx.append(kx)
         self._ky.append(ky)
         self._evl.append(np.real(-1j*np.log(eigvals))[0])
@@ -181,7 +157,8 @@ def get_berry_curvature(disp, kx, ky, dk=0.000001):
     dA_dky = (get_berry_connection(disp, kx, ky+dk)-get_berry_connection(disp, kx, ky-dk))/(2*dk)
     return dA_dkx[:, 1]-dA_dky[:, 0]
 
-def get_berry_curvature2(disp, kx, ky):
+# Alternate method of calculating berry curvature
+def get_berry_curvature_from_gradient(disp, kx, ky):
     grad = get_eig_gradient(disp, kx, ky)
     result = np.zeros(4)
     for i in range(4):
@@ -239,30 +216,6 @@ def get_chern_number(U, res=50):
 
     return (-2*np.pi*np.sum(berry_curvature, axis=(0,1)))/(res*res)
 
-"""
-def eig_adj(eigvals1, dx1, dy1, eigvals2, dx2, dy2):
-    eig2_sorted = np.zeros(np.shape(eigvals2), dtype=complex)
-    dx2_sorted = np.zeros(np.shape(dx2), dtype=complex)
-    dy2_sorted = np.zeros(np.shape(dy2), dtype=complex)
-    for i, (E, dx, dy) in enumerate(zip(eigvals1, dx1, dy1)):
-        dists = np.arcsin(np.sin(np.abs(0.5*(np.angle(E)-np.angle(eigvals2)))))
-        threshold = dists/max(1e-10, min(dists)) < 2
-
-        closest_E, closest_dx, closest_dy = eigvals2[threshold], dx2[threshold], dy2[threshold]
-        gradient_dists = np.sqrt(((dx-closest_dx)**2)+((dy-closest_dy)**2))
-
-        E2 = closest_E[np.argmin(gradient_dists)]
-        dx2_sorted = closest_dx[np.argmin(gradient_dists)]
-        dy2_sorted = closest_dy[np.argmin(gradient_dists)]
-
-        eig2_sorted[i] = E2
-        dx2 = dx2[eigvals2 != E2]
-        dy2 = dy2[eigvals2 != E2]
-        eigvals2 = eigvals2[eigvals2 != E2]
-    
-    return eig2_sorted, dx2_sorted, dy2_sorted
-"""
-
 def eig_adj(eigvals1, eigvecs1, eigvals2, eigvecs2):
     min_dist = 1e20
     indices = [0, 1, 2, 3]
@@ -296,42 +249,6 @@ def plot_gradient(U, n, res=50):
     ax.set_ylabel('ky')
     ax.set_zlabel('E')
     plt.show()
-
-"""
-def plot_dispersion_matched(U, n, res=50):
-    kx = np.linspace(-np.pi, np.pi, res)
-    ky = np.linspace(-np.pi, np.pi, res)
-    KX, KY = np.meshgrid(kx, ky)
-
-    vfunc = np.vectorize(lambda k_x, k_y: get_floquet_eig(U, k_x, k_y), signature='(),()->(4),(4,4)')
-    eigvals, eigvecs = vfunc(KX, KY)
-
-    vfunc = np.vectorize(lambda eigv, k_x, k_y: get_gradient(U, eigv, k_x, k_y), signature='(4,4),(),()->(4),(4)')
-    dx, dy = vfunc(eigvecs, KX, KY)
-
-    eigvals_out = np.zeros((res, res, 4), dtype=complex)
-    dx_out = np.zeros((res, res, 4), dtype=complex)
-    dy_out = np.zeros((res, res, 4), dtype=complex)
-
-    eigvals_out[0][0] = eigvals[0][0]
-    dx_out[0][0] = dx[0][0]
-    dy_out[0][0] = dy[0][0]
-
-    for i in range(1, res):
-        eigvals_out[i][0], dx_out[i][0], dy_out[i][0] = eig_adj(eigvals_out[i-1][0], dx_out[i-1][0], dy_out[i-1][0], eigvals[i][0], dx[i][0], dy[i][0])
-
-    for j in range(1, res):
-        for i in range(0, res):
-            eigvals_out[i][j], dx_out[i][j], dy_out[i][j] = eig_adj(eigvals_out[i][j-1], dx_out[i][j-1], dy_out[i][j-1], eigvals[i][j], dx[i][j], dy[i][j])
-
-    fig = plt.figure()
-    ax = Axes3D(fig)
-    ax.plot_surface(KX, KY, np.real(-1j*np.log(eigvals_out[:, :, n])), rstride=1, cstride=1, cmap='viridis', edgecolor='none')
-    ax.set_xlabel('kx')
-    ax.set_ylabel('ky')
-    ax.set_zlabel('E')
-    plt.show()
-"""
 
 def get_dispersion_meshgrid(U, res):
     kx = np.linspace(-np.pi, np.pi, res)
@@ -367,29 +284,3 @@ def plot_dispersion_matched(U, n_array=[0, 1, 2, 3], res=50):
     ax.set_zlabel('E')
     plt.show()
 
-"""
-def plot_berry_connection(U, n, res=50):
-    KX, KY, eigvals, eigvecs = get_dispersion_meshgrid(U, res)
-
-    vfunc = np.vectorize(lambda evl, evc, k_x, k_y: get_berry_connection(U, evl, evc, k_x, k_y), signature='(4),(4,4),(),()->(4,2)')
-    berry_connection = vfunc(eigvals, eigvecs, KX, KY)
-
-    fig, ax = plt.subplots()
-    ax.quiver(KX, KY, berry_connection[:, :, n, 0], berry_connection[:, :, n, 1])
-    ax.set_xlabel('kx')
-    ax.set_ylabel('ky')
-    plt.show()
-
-def get_chern_number(U, n, res=50):
-    KX, KY, eigvals, eigvecs = get_dispersion_meshgrid(U, res)
-
-    vfunc = np.vectorize(lambda evl, evc, k_x, k_y: get_berry_connection(U, evl, evc, k_x, k_y), signature='(4),(4,4),(),()->(4,2)')
-    berry_connection = vfunc(eigvals, eigvecs, KX, KY)
-
-    bottom = sum(berry_connection[:, 0, n, 0])
-    right = sum(berry_connection[res-1, :, n, 1])
-    top = -sum(berry_connection[:, res-1, n, 0])
-    left = -sum(berry_connection[0, :, n, 1])
-
-    return (bottom)/res
-"""
