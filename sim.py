@@ -16,6 +16,23 @@ def colorize(z):
     c = c.swapaxes(0,2)
     return c
 
+def create_hopping_grid(h, width, height):
+    grid = np.zeros((width, height, 11), dtype=complex)
+    grid[:, :] = h
+    return grid
+
+def time_evolution_from_hopping_grid(grid):
+    width, height, _, _ = U_grid.shape
+    U = np.zeros((width*height*2, width*height*2), dtype=complex)
+    for i1 in range(width):
+        for j1 in range(height):
+            idx1 = 2*(i1*height + j1)
+            for direction, (i2, j2) in enumerate([(i1, j1+1), (i1+1, j1), (i1, j1-1), (i1-1, j1)]):
+                i2, j2 = (i2%width), (j2%height)
+                idx2 = (4 * (i2*height + j2))
+                U[idx1+direction, idx2:idx2+4] = U_grid[i2, j2, direction]
+    return U
+
 def create_multiport_grid(U, width, height):
     grid = np.zeros((width, height, 4, 4), dtype=complex)
     grid[:, :] = U
@@ -35,9 +52,15 @@ def create_vertical_multiport_barrier_grid(U1, U2, width, height):
 
 def create_diagonal_multiport_barrier_grid(U1, U2, size):
     grid = np.zeros((size, size, 4, 4), dtype=complex)
-    iu = np.triu_indices(size)
+    iu = np.triu_indices(size, size//3)
+    iu2 = np.triu_indices(size, 2*(size//3))
+    il = np.tril_indices(size, -size//3)
+    il2 = np.tril_indices(size, -2*(size//3))
     grid[:, :] = U1
     grid[iu] = U2
+    grid[il] = U2
+    grid[iu2] = U1
+    grid[il2] = U1
     return grid
 
 def create_multiport_barrier_grid_patch(U1, U2, width, height):
@@ -141,6 +164,13 @@ def is_patch_edge_state(v, width, height, threshold=0.5):
     has_edge = np.linalg.norm(v_grid[width//4, height//2]) > threshold/(width*height)
     has_exterior = np.linalg.norm(v_grid[0, height//2]) > threshold/(width*height)
     has_interior = np.linalg.norm(v_grid[width//2, height//2]) > threshold/(width*height)
+    return has_edge, has_exterior, has_interior
+
+def is_diagonal_edge_state(v, width, height, threshold=0.5):
+    v_grid = state_vector_to_state_grid(v, width, height)
+    has_edge = np.linalg.norm(v_grid[9, 14]) > threshold/(width*height)
+    has_exterior = np.linalg.norm(v_grid[width//2, height//2]) > threshold/(width*height)
+    has_interior = np.linalg.norm(v_grid[width//4, height-(height//4)]) > threshold/(width*height)
     return has_edge, has_exterior, has_interior
 
 def find_edge_state_indices(eig, width, height, threshold=0.5, edge_state_finder=is_edge_state):
