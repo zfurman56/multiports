@@ -193,7 +193,7 @@ def plot_berry_curvature(U, n, res=50):
 
     disp = DispersionRelation(U, 50)
 
-    vfunc = np.vectorize(lambda k_x, k_y: get_berry_curvature2(disp, k_x, k_y), signature='(),()->(4)')
+    vfunc = np.vectorize(lambda k_x, k_y: get_berry_curvature_from_gradient(disp, k_x, k_y), signature='(),()->(4)')
     berry_curvature = vfunc(KX, KY)
 
     fig, ax = plt.subplots()
@@ -211,7 +211,7 @@ def get_chern_number(U, res=50):
 
     disp = DispersionRelation(U, res)
 
-    vfunc = np.vectorize(lambda k_x, k_y: get_berry_curvature2(disp, k_x, k_y), signature='(),()->(4)')
+    vfunc = np.vectorize(lambda k_x, k_y: get_berry_curvature_from_gradient(disp, k_x, k_y), signature='(),()->(4)')
     berry_curvature = vfunc(KX, KY)
 
     return (-2*np.pi*np.sum(berry_curvature, axis=(0,1)))/(res*res)
@@ -283,4 +283,39 @@ def plot_dispersion_matched(U, n_array=[0, 1, 2, 3], res=50):
     ax.set_ylabel('ky')
     ax.set_zlabel('E')
     plt.show()
+
+def get_dispersion_slice(U, kx, res=50):
+    pairs = [(ky, e) for ky in np.linspace(0, 2*np.pi, res) for e in get_momentum_eigenvals(U, kx, ky)]
+    KY = [p[0] for p in pairs]
+    E = [p[1] for p in pairs]
+    return KY, E
+
+class SlicePlot:
+    def __init__(self, U1, U2, res=50):
+        self._U1 = U1
+        self._U2 = U2
+        self._res = res
+
+        KY, E = get_dispersion_slice(U1, 0, res)
+
+        plt.subplots_adjust(left=0.25, bottom=0.25)
+        self._scatter = plt.scatter(KY, E)
+
+        axt = plt.axes([0.25, 0.15, 0.65, 0.03])
+        self.t_slider = Slider(axt, 't', 0, 1, valinit=0)
+        self.t_slider.on_changed(lambda t: self._update())
+        
+        axkx = plt.axes([0.25, 0.1, 0.65, 0.03])
+        self.kx_slider = Slider(axkx, 'kx', 0, 2*np.pi, valinit=0)
+        self.kx_slider.on_changed(lambda t: self._update())
+
+        plt.show()
+
+    def _update(self):
+        t = self.t_slider.val
+        kx = self.kx_slider.val
+        KY, E = get_dispersion_slice(self._U1*(1-t)+self._U2*t, kx, self._res)
+        self._scatter.set_offsets(np.c_[KY, E])
+        plt.draw()
+
 
